@@ -3,9 +3,11 @@ import os
 import cv2
 import time
 import numpy as np
+import sqlite3
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QLineEdit, QWidget, QListWidget, 
-                             QStackedWidget, QSpinBox, QMessageBox)
+                             QStackedWidget, QSpinBox, QMessageBox, QTableWidget, 
+                             QTableWidgetItem)
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt, QTimer
 
@@ -13,28 +15,45 @@ class UserPhotoCaptureApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('User Photo Management')
-        self.setGeometry(100, 100, 800, 600)  # Geniş pencere
+        self.setGeometry(100, 100, 800, 600)
 
-        # Zaman sınırı
         self.time_limit = 10
+        self.time_start = None
 
-        # Ana widget ve layout
+        # Veritabanı bağlantısı
+        self.db = sqlite3.connect('user_photos.db')
+        self.cursor = self.db.cursor()
+        self.create_table()
+        self.create_timetable()
+
+        # Ana layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
 
-        # Sol panel: Kullanıcı listesi
+        # Sol panel düzenini tekrar düzenliyoruz
         left_panel = QVBoxLayout()
+
+        # Kullanıcı listesi
         self.user_list = QListWidget()
         self.user_list.itemClicked.connect(self.load_user)
-        left_panel.addWidget(QLabel('Kayıtlı Kullanıcılar:'))
+        left_panel.addWidget(QLabel('Şuanki Kullanıcılar:'))
         left_panel.addWidget(self.user_list)
 
         # Ayarlar butonu
         settings_button = QPushButton('Ayarlar')
         settings_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         left_panel.addWidget(settings_button)
+
+        # Geçmiş butonu
+        history_button = QPushButton('Geçmiş')
+        history_button.clicked.connect(self.show_history)
+        left_panel.addWidget(history_button)
+
+        # Layout'u ana layout'a ekle
+        main_layout.addLayout(left_panel, 1)
+
 
         # Sağ panel: Kamera ve diğer sayfalar
         self.stacked_widget = QStackedWidget()
@@ -45,7 +64,7 @@ class UserPhotoCaptureApp(QMainWindow):
         capture_page.setLayout(capture_layout)
 
         self.camera_label = QLabel()
-        self.camera_label.setMinimumSize(640, 480)  # Kamera alanı
+        self.camera_label.setMinimumSize(640, 480)
         self.camera_label.setStyleSheet("background-color: black; color: white; font-size: 16px;")
         self.camera_label.setAlignment(Qt.AlignCenter)
         capture_layout.addWidget(self.camera_label)
@@ -69,6 +88,11 @@ class UserPhotoCaptureApp(QMainWindow):
         back_button = QPushButton('Geri Dön')
         back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         user_display_layout.addWidget(back_button)
+
+        # Tamam butonu
+        self.save_button = QPushButton('Tamam')
+        self.save_button.clicked.connect(self.save_to_database)
+        user_display_layout.addWidget(self.save_button)
 
         # Ayarlar sayfası
         settings_page = QWidget()
@@ -111,11 +135,40 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Kullanıcıları yükle
         self.load_existing_users()
+        self.fillPhotoStamps()
+
+    def create_table(self):
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS users
+                               (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT, photo BLOB, entry_date TEXT, time_limit INTEGER)''')
+        self.db.commit()
+
+    def create_timetable(self):
+        self.cursor.execute('''CREATE TABLE IF NOT EXISTS timetable
+                               (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT, time DATETIME)''')
+        self.db.commit()
+
+    def load_user(self, item):
+    # Kullanıcı adına tıklandığında, kullanıcı fotoğrafını yükle
+        self.username = item.text()  # Listeden tıklanan kullanıcının adını al
+        photo_path = f'users/{self.username}.jpg'  # Fotoğrafın yolu
+
+    # Fotoğrafı göster
+        if os.path.exists(photo_path):
+            pixmap = QPixmap(photo_path)
+            self.user_photo_label.setPixmap(pixmap.scaled(self.user_photo_label.size(), 
+                                                        Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            # Fotoğraf yoksa, siyah bir görsel koy
+            empty_pixmap = QPixmap(self.camera_label.size())  # Siyah bir görsel oluştur
+            empty_pixmap.fill(Qt.black)  # Siyah renkle doldur
+            self.user_photo_label.setPixmap(empty_pixmap)
+        
+        # Kullanıcı fotoğraf sayfasına geçiş yap
+        self.stacked_widget.setCurrentIndex(1)
+
 
     def load_existing_users(self):
         self.user_list.clear()
-        if not os.path.exists('users'):
-            os.makedirs('users')
         users = []
         for filename in os.listdir('users'):
             if filename.endswith('.jpg'):
@@ -125,19 +178,6 @@ class UserPhotoCaptureApp(QMainWindow):
         users.sort(reverse=True, key=lambda x: x[0])  # Tarihe göre sırala
         for _, username in users:
             self.user_list.addItem(username)
-
-    def timerEvent(self, event):
-        if not self.capture.isOpened():
-            return
-        ret, frame = self.capture.read()
-        if ret:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
-            qt_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pixmap = QPixmap.fromImage(qt_image)
-            self.camera_label.setPixmap(pixmap.scaled(self.camera_label.size(), 
-                                                      Qt.KeepAspectRatio))
 
     def save_user_on_enter(self):
         name = self.name_input.text().strip()
@@ -161,10 +201,40 @@ class UserPhotoCaptureApp(QMainWindow):
         self.load_existing_users()
         self.name_input.clear()
         self.name_input.setFocus()
+        self.cursor.execute("INSERT INTO timetable (name, time) VALUES (?, ?)",
+                            (filename, self.photo_timestamps[filename]))
+        self.db.commit()
 
     def save_black_image(self, filepath):
         black_image = np.zeros((480, 640, 3), dtype=np.uint8)  # Siyah görüntü
         cv2.imwrite(filepath, black_image)
+
+    def save_to_database(self):
+        name = self.username.split()
+        name = name[0]
+        if not name:
+            print("nononon")
+            return
+
+        filename = f'users/{name}.jpg'
+        print(name)
+        photo_data = open(filename, 'rb').read()  # Fotoğrafı veritabanına ekle
+        entry_date = time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time()))
+        self.cursor.execute("INSERT INTO users (name, photo, entry_date, time_limit) VALUES (?, ?, ?, ?)",
+                            (name, photo_data, entry_date, self.time_limit))
+        
+
+        sql = 'DELETE FROM timetable WHERE name = ?'
+        self.cursor.execute(sql, (name,))
+        self.db.commit()
+        self.load_existing_users()  # Listeyi güncelle
+        self.stacked_widget.setCurrentIndex(0)  # Ana sayfaya dön
+        if os.path.exists(filename):
+            os.remove(filename)  # Dosyayı siliyoruz
+            print(f"{filename} dosyası başarıyla silindi.")
+            self.load_existing_users()
+        else:
+            print(f"{filename} dosyası bulunamadı.")
 
     def check_photo_timestamps(self):
         current_time = time.time()
@@ -176,29 +246,70 @@ class UserPhotoCaptureApp(QMainWindow):
                     item.setText(f"{base_name} ❗")
                     item.setForeground(Qt.red)
 
-    def update_time_limit(self, value):
-        self.time_limit = value
+    def fillPhotoStamps(self):
+        self.cursor.execute("SELECT * FROM timetable")
+        rows = self.cursor.fetchall()
+        for row in rows:
+            self.photo_timestamps[row[1]] = row[2]
+                
 
-    def load_user(self, item):
-        username = item.text().split(' ❗')[0]
-        photo_path = f'users/{username}.jpg'
-        pixmap = QPixmap(photo_path)
-        self.user_photo_label.setPixmap(pixmap.scaled(
-            self.user_photo_label.size(), 
-            Qt.KeepAspectRatio, 
-            Qt.SmoothTransformation
-        ))
-        self.stacked_widget.setCurrentIndex(1)
+    def deleteDB(self):
+        self.cursor.execute("DROP TABLE users")
+        self.cursor.execute("DROP TABLE timetable")
+
+    def show_history(self):
+        history_page = QWidget()
+        history_layout = QVBoxLayout()
+        history_page.setLayout(history_layout)
+
+        # Geçmiş kaydını tabloya ekle
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels(["İsim", "Fotoğraf", "Giriş Tarihi", "Süre"])
+        history_layout.addWidget(table)
+
+        self.cursor.execute("SELECT * FROM users")
+        rows = self.cursor.fetchall()
+        for row in rows:
+            print(row[0])
+            photo_data = row[1]
+            row_position = table.rowCount()
+            table.insertRow(row_position)
+            if photo_data:
+            # BLOB verisini QPixmap nesnesine dönüştür
+                photo = QPixmap()
+                photo.loadFromData(photo_data)
+
+                # Küçük boyutta göster
+                photo = photo.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+                # Fotoğrafı QLabel'e ekleyelim
+                photo_label = QLabel()
+                photo_label.setPixmap(photo)
+
+                photo_label = QLabel()
+                photo_label.setPixmap(photo)
+
+                # Fotoğrafı tablo hücresine yerleştir
+                table.setCellWidget(row_position, 1, photo_label)
+            
+            table.setItem(row_position, 0, QTableWidgetItem(row[0]))  # İsim
+            #table.setItem(row_position, 1, QTableWidgetItem(f"Fotoğraf - {row[1]}"))
+            table.setItem(row_position, 2, QTableWidgetItem(row[2]))  # Giriş tarihi
+            table.setItem(row_position, 3, QTableWidgetItem(str(row[3])))  # Süre
+
+        self.stacked_widget.addWidget(history_page)
+        self.stacked_widget.setCurrentIndex(3)
+
+    def update_time_limit(self):
+        self.time_limit = self.time_limit_spinbox.value()
 
     def closeEvent(self, event):
         self.capture.release()
-        event.accept()
+        self.db.close()
 
-def main():
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = UserPhotoCaptureApp()
     window.show()
     sys.exit(app.exec_())
-
-if __name__ == '__main__':
-    main()
