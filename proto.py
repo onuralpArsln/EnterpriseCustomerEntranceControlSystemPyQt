@@ -1,17 +1,21 @@
 import sys
 import os
 import cv2
+import time
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QLineEdit, QWidget, QMessageBox, 
-                             QListWidget, QStackedWidget)
+                             QListWidget, QStackedWidget, QSpinBox)
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 
 class UserPhotoCaptureApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('User Photo Management')
         self.setGeometry(100, 100, 800, 600)
+
+        # Default time limit
+        self.time_limit = 10
 
         # Central widget and main layout
         central_widget = QWidget()
@@ -61,17 +65,49 @@ class UserPhotoCaptureApp(QMainWindow):
         self.back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         user_display_layout.addWidget(self.back_button)
 
+        # Settings page
+        settings_page = QWidget()
+        settings_layout = QVBoxLayout()
+        settings_page.setLayout(settings_layout)
+
+        # Time limit setting
+        settings_layout.addWidget(QLabel('Set Time Limit (seconds):'))
+        self.time_limit_spinbox = QSpinBox()
+        self.time_limit_spinbox.setRange(1, 60)
+        self.time_limit_spinbox.setValue(self.time_limit)
+        self.time_limit_spinbox.valueChanged.connect(self.update_time_limit)
+        settings_layout.addWidget(self.time_limit_spinbox)
+
+        # Back to capture button
+        settings_back_button = QPushButton('Back to Capture')
+        settings_back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        settings_layout.addWidget(settings_back_button)
+
         # Add pages to stacked widget
         self.stacked_widget.addWidget(capture_page)
         self.stacked_widget.addWidget(user_display_page)
+        self.stacked_widget.addWidget(settings_page)
 
         # Add layouts to main layout
         main_layout.addLayout(left_panel, 1)
         main_layout.addWidget(self.stacked_widget, 3)
 
+        # Settings button
+        settings_button = QPushButton('Settings')
+        settings_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
+        left_panel.addWidget(settings_button)
+
         # Initialize camera
         self.capture = cv2.VideoCapture(0)
         self.timer = self.startTimer(30)
+
+        # Initialize photo timestamps
+        self.photo_timestamps = {}
+
+        # Setup time limit check timer
+        self.check_timer = QTimer()
+        self.check_timer.timeout.connect(self.check_photo_timestamps)
+        self.check_timer.start(1000)
 
         # Load existing users
         self.load_existing_users()
@@ -122,12 +158,25 @@ class UserPhotoCaptureApp(QMainWindow):
         # Save image
         cv2.imwrite(filename, frame)
         
+        # Save timestamp
+        self.photo_timestamps[filename] = time.time()
+        
         # Reload users list
         self.load_existing_users()
         
         # Prepare for next entry
         self.name_input.clear()
         self.name_input.setFocus()  # Ensure focus remains on name input after saving
+
+    def check_photo_timestamps(self):
+        current_time = time.time()
+        for filename, timestamp in list(self.photo_timestamps.items()):
+            if current_time - timestamp > self.time_limit:
+                QMessageBox.information(self, 'Photo Alert', f'Time limit exceeded for {os.path.basename(filename)}.')
+                del self.photo_timestamps[filename]
+
+    def update_time_limit(self, value):
+        self.time_limit = value
 
     def load_user(self, item):
         # Load selected user's photo
