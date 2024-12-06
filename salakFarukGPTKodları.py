@@ -2,9 +2,10 @@ import sys
 import os
 import cv2
 import time
+import numpy as np
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QLineEdit, QWidget, QListWidget, 
-                             QStackedWidget, QSpinBox)
+                             QStackedWidget, QSpinBox, QMessageBox)
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt, QTimer
 
@@ -12,7 +13,7 @@ class UserPhotoCaptureApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('User Photo Management')
-        self.setGeometry(100, 100, 800, 600)  # Daha geniş pencere
+        self.setGeometry(100, 100, 800, 600)  # Geniş pencere
 
         # Zaman sınırı
         self.time_limit = 10
@@ -45,7 +46,8 @@ class UserPhotoCaptureApp(QMainWindow):
 
         self.camera_label = QLabel()
         self.camera_label.setMinimumSize(640, 480)  # Kamera alanı
-        self.camera_label.setStyleSheet("background-color: black;")
+        self.camera_label.setStyleSheet("background-color: black; color: white; font-size: 16px;")
+        self.camera_label.setAlignment(Qt.AlignCenter)
         capture_layout.addWidget(self.camera_label)
 
         name_layout = QHBoxLayout()
@@ -94,7 +96,10 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Kamera başlat
         self.capture = cv2.VideoCapture(0)
-        self.timer = self.startTimer(30)
+        if not self.capture.isOpened():
+            self.camera_label.setText("Kamera erişilemiyor!")
+        else:
+            self.timer = self.startTimer(30)
 
         # Kullanıcı zamanları
         self.photo_timestamps = {}
@@ -122,6 +127,8 @@ class UserPhotoCaptureApp(QMainWindow):
             self.user_list.addItem(username)
 
     def timerEvent(self, event):
+        if not self.capture.isOpened():
+            return
         ret, frame = self.capture.read()
         if ret:
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -133,18 +140,31 @@ class UserPhotoCaptureApp(QMainWindow):
                                                       Qt.KeepAspectRatio))
 
     def save_user_on_enter(self):
-        ret, frame = self.capture.read()
-        if not ret:
-            return
         name = self.name_input.text().strip()
         if not name:
             return
+
         filename = f'users/{name}.jpg'
-        cv2.imwrite(filename, frame)
+
+        if self.capture.isOpened():
+            ret, frame = self.capture.read()
+            if ret:
+                cv2.imwrite(filename, frame)
+            else:
+                QMessageBox.warning(self, "Hata", "Kamera görüntüsü alınamadı. Siyah bir görsel kaydediliyor.")
+                self.save_black_image(filename)
+        else:
+            QMessageBox.warning(self, "Hata", "Kamera bağlantısı yok. Siyah bir görsel kaydediliyor.")
+            self.save_black_image(filename)
+
         self.photo_timestamps[filename] = time.time()
         self.load_existing_users()
         self.name_input.clear()
         self.name_input.setFocus()
+
+    def save_black_image(self, filepath):
+        black_image = np.zeros((480, 640, 3), dtype=np.uint8)  # Siyah görüntü
+        cv2.imwrite(filepath, black_image)
 
     def check_photo_timestamps(self):
         current_time = time.time()
