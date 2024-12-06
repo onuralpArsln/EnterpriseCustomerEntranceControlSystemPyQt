@@ -38,32 +38,14 @@ class UserPhotoCaptureApp(QMainWindow):
         self.camera_label = QLabel()
         capture_layout.addWidget(self.camera_label)
 
-        # Buttons layout
-        button_layout = QHBoxLayout()
-        self.snap_button = QPushButton('Snap Photo')
-        self.snap_button.clicked.connect(self.snap_photo)
-        button_layout.addWidget(self.snap_button)
-
-        self.add_user_button = QPushButton('Add New User')
-        self.add_user_button.clicked.connect(self.add_new_user)
-        self.add_user_button.setEnabled(False)
-        button_layout.addWidget(self.add_user_button)
-
-        capture_layout.addLayout(button_layout)
-
         # Name input layout
         name_layout = QHBoxLayout()
         self.name_label = QLabel('Name:')
         self.name_input = QLineEdit()
+        self.name_input.returnPressed.connect(self.save_user_on_enter)
         name_layout.addWidget(self.name_label)
         name_layout.addWidget(self.name_input)
         capture_layout.addLayout(name_layout)
-
-        # Save button
-        self.save_button = QPushButton('Save User')
-        self.save_button.clicked.connect(self.save_user)
-        self.save_button.setEnabled(False)
-        capture_layout.addWidget(self.save_button)
 
         # User display page
         user_display_page = QWidget()
@@ -89,11 +71,13 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Initialize camera
         self.capture = cv2.VideoCapture(0)
-        self.captured_image = None
         self.timer = self.startTimer(30)
 
         # Load existing users
         self.load_existing_users()
+
+        # Set focus to name input when application starts
+        self.name_input.setFocus()
 
     def load_existing_users(self):
         # Clear existing list
@@ -119,38 +103,31 @@ class UserPhotoCaptureApp(QMainWindow):
             self.camera_label.setPixmap(pixmap.scaled(self.camera_label.size(), 
                                                       Qt.KeepAspectRatio))
 
-    def snap_photo(self):
+    def save_user_on_enter(self):
+        # Her enter tuşunda yeni bir fotoğraf çek
         ret, frame = self.capture.read()
-        if ret:
-            self.captured_image = frame
-            self.snap_button.setEnabled(False)
-            self.save_button.setEnabled(True)
-            self.name_input.setEnabled(True)
-            QMessageBox.information(self, 'Photo Captured', 'Photo has been captured. Enter name and save.')
+        if not ret:
+            return
 
-    def save_user(self):
         name = self.name_input.text().strip()
         if not name:
-            QMessageBox.warning(self, 'Error', 'Please enter a name')
             return
 
         # Check if user already exists
-        if os.path.exists(f'users/{name}.jpg'):
-            reply = QMessageBox.question(self, 'User Exists', 
-                                         'A user with this name already exists. Overwrite?', 
-                                         QMessageBox.Yes | QMessageBox.No)
-            if reply == QMessageBox.No:
-                return
+        filename = f'users/{name}.jpg'
+        if os.path.exists(filename):
+            # Üzerine yazma onayı için kullanıcıya sormadan otomatik üzerine yaz
+            pass
 
         # Save image
-        filename = f'users/{name}.jpg'
-        cv2.imwrite(filename, self.captured_image)
-
-        QMessageBox.information(self, 'Success', f'User {name} saved successfully')
+        cv2.imwrite(filename, frame)
         
-        # Reload users list and reset capture
+        # Reload users list
         self.load_existing_users()
-        self.add_new_user()
+        
+        # Prepare for next entry
+        self.name_input.clear()
+        self.name_input.setFocus()  # Ensure focus remains on name input after saving
 
     def load_user(self, item):
         # Load selected user's photo
@@ -167,18 +144,6 @@ class UserPhotoCaptureApp(QMainWindow):
         
         # Switch to user display page
         self.stacked_widget.setCurrentIndex(1)
-
-    def add_new_user(self):
-        # Reset everything for a new user
-        self.name_input.clear()
-        self.name_input.setEnabled(False)
-        self.save_button.setEnabled(False)
-        self.snap_button.setEnabled(True)
-        self.add_user_button.setEnabled(False)
-        self.captured_image = None
-        
-        # Switch back to camera capture page
-        self.stacked_widget.setCurrentIndex(0)
 
     def closeEvent(self, event):
         self.capture.release()
