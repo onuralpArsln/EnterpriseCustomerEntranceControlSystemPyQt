@@ -272,7 +272,7 @@ class UserPhotoCaptureApp(QMainWindow):
         rows = self.cursor.fetchall()
         for row in rows:
             print(row[0])
-            photo_data = row[1]
+            photo_data = row[2]
             row_position = table.rowCount()
             table.insertRow(row_position)
             if photo_data:
@@ -293,10 +293,10 @@ class UserPhotoCaptureApp(QMainWindow):
                 # Fotoğrafı tablo hücresine yerleştir
                 table.setCellWidget(row_position, 1, photo_label)
             
-            table.setItem(row_position, 0, QTableWidgetItem(row[0]))  # İsim
+            table.setItem(row_position, 0, QTableWidgetItem(row[1]))  # İsim
             #table.setItem(row_position, 1, QTableWidgetItem(f"Fotoğraf - {row[1]}"))
-            table.setItem(row_position, 2, QTableWidgetItem(row[2]))  # Giriş tarihi
-            table.setItem(row_position, 3, QTableWidgetItem(str(row[3])))  # Süre
+            table.setItem(row_position, 2, QTableWidgetItem(row[3]))  # Giriş tarihi
+            table.setItem(row_position, 3, QTableWidgetItem(str(row[4])))  # Süre
 
         self.stacked_widget.addWidget(history_page)
         self.stacked_widget.setCurrentIndex(3)
