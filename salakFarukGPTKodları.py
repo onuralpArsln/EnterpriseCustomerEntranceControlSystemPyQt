@@ -17,6 +17,50 @@ class UserPhotoCaptureApp(QMainWindow):
         self.setWindowTitle('User Photo Management')
         self.setGeometry(100, 100, 800, 600)
 
+        # ** Genel Stil Uygulaması **
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f0f0f5;
+            }
+            QLabel {
+                font-size: 14px;
+                color: #333;
+            }
+            QPushButton {
+                font-size: 14px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #397d3f;
+            }
+            QLineEdit {
+                border: 2px solid #ccc;
+                border-radius: 8px;
+                padding: 5px;
+                font-size: 14px;
+                color: #333;
+            }
+            QListWidget {
+                border: 2px solid #ccc;
+                border-radius: 8px;
+                font-size: 14px;
+                color: #333;
+                background-color: #fff;
+            }
+            QTableWidget {
+                border: 2px solid #ccc;
+                border-radius: 8px;
+                background-color: #fff;
+            }
+        """)
+
         self.time_limit = 10
         self.time_start = None
 
@@ -32,7 +76,7 @@ class UserPhotoCaptureApp(QMainWindow):
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
 
-        # Sol panel düzenini tekrar düzenliyoruz
+        # Sol panel
         left_panel = QVBoxLayout()
 
         # Kullanıcı listesi
@@ -41,21 +85,18 @@ class UserPhotoCaptureApp(QMainWindow):
         left_panel.addWidget(QLabel('Şuanki Kullanıcılar:'))
         left_panel.addWidget(self.user_list)
 
-        # Ayarlar butonu
+        # Ayarlar ve Geçmiş butonları
         settings_button = QPushButton('Ayarlar')
         settings_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(2))
         left_panel.addWidget(settings_button)
 
-        # Geçmiş butonu
         history_button = QPushButton('Geçmiş')
         history_button.clicked.connect(self.show_history)
         left_panel.addWidget(history_button)
 
-        # Layout'u ana layout'a ekle
         main_layout.addLayout(left_panel, 1)
 
-
-        # Sağ panel: Kamera ve diğer sayfalar
+        # Sağ panel
         self.stacked_widget = QStackedWidget()
 
         # Kamera sayfası
@@ -65,7 +106,15 @@ class UserPhotoCaptureApp(QMainWindow):
 
         self.camera_label = QLabel()
         self.camera_label.setMinimumSize(640, 480)
-        self.camera_label.setStyleSheet("background-color: black; color: white; font-size: 16px;")
+        self.camera_label.setStyleSheet("""
+            QLabel {
+                background-color: #000;
+                color: #fff;
+                font-size: 16px;
+                border: 3px solid #4CAF50;
+                border-radius: 10px;
+            }
+        """)
         self.camera_label.setAlignment(Qt.AlignCenter)
         capture_layout.addWidget(self.camera_label)
 
@@ -89,7 +138,6 @@ class UserPhotoCaptureApp(QMainWindow):
         back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         user_display_layout.addWidget(back_button)
 
-        # Tamam butonu
         self.save_button = QPushButton('Tamam')
         self.save_button.clicked.connect(self.save_to_database)
         user_display_layout.addWidget(self.save_button)
@@ -115,7 +163,6 @@ class UserPhotoCaptureApp(QMainWindow):
         self.stacked_widget.addWidget(user_display_page)
         self.stacked_widget.addWidget(settings_page)
 
-        main_layout.addLayout(left_panel, 1)
         main_layout.addWidget(self.stacked_widget, 3)
 
         # Kamera başlat
@@ -245,6 +292,11 @@ class UserPhotoCaptureApp(QMainWindow):
                 for item in items:
                     item.setText(f"{base_name} ❗")
                     item.setForeground(Qt.red)
+                    
+                    # Yazıyı kalınlaştır
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
 
     def fillPhotoStamps(self):
         self.cursor.execute("SELECT * FROM timetable")
@@ -297,6 +349,11 @@ class UserPhotoCaptureApp(QMainWindow):
             #table.setItem(row_position, 1, QTableWidgetItem(f"Fotoğraf - {row[1]}"))
             table.setItem(row_position, 2, QTableWidgetItem(row[3]))  # Giriş tarihi
             table.setItem(row_position, 3, QTableWidgetItem(str(row[4])))  # Süre
+
+            # Geri dön butonu
+        back_button = QPushButton('Geri Dön')
+        back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        history_layout.addWidget(back_button)
 
         self.stacked_widget.addWidget(history_page)
         self.stacked_widget.setCurrentIndex(3)
