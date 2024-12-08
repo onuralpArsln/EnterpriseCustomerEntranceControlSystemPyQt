@@ -310,6 +310,15 @@ class UserPhotoCaptureApp(QMainWindow):
         self.cursor.execute("DROP TABLE timetable")
 
     def show_history(self):
+        # Önceki geçmiş ekranını kaldır (varsa)
+        for i in range(self.stacked_widget.count()):
+            if isinstance(self.stacked_widget.widget(i), QWidget) and self.stacked_widget.widget(i).layout() is not None:
+                layout = self.stacked_widget.widget(i).layout()
+                if isinstance(layout.itemAt(0).widget(), QTableWidget):
+                    self.stacked_widget.removeWidget(self.stacked_widget.widget(i))
+                    break
+
+        # Yeni geçmiş sayfası oluştur
         history_page = QWidget()
         history_layout = QVBoxLayout()
         history_page.setLayout(history_layout)
@@ -320,25 +329,22 @@ class UserPhotoCaptureApp(QMainWindow):
         table.setHorizontalHeaderLabels(["İsim", "Fotoğraf", "Giriş Tarihi", "Süre"])
         history_layout.addWidget(table)
 
+        # Veritabanından verileri al
         self.cursor.execute("SELECT * FROM users")
         rows = self.cursor.fetchall()
         for row in rows:
-            print(row[0])
             photo_data = row[2]
             row_position = table.rowCount()
             table.insertRow(row_position)
             if photo_data:
-            # BLOB verisini QPixmap nesnesine dönüştür
+                # BLOB verisini QPixmap nesnesine dönüştür
                 photo = QPixmap()
                 photo.loadFromData(photo_data)
 
                 # Küçük boyutta göster
                 photo = photo.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
-                # Fotoğrafı QLabel'e ekleyelim
-                photo_label = QLabel()
-                photo_label.setPixmap(photo)
-
+                # Fotoğrafı QLabel'e ekle
                 photo_label = QLabel()
                 photo_label.setPixmap(photo)
 
@@ -346,17 +352,17 @@ class UserPhotoCaptureApp(QMainWindow):
                 table.setCellWidget(row_position, 1, photo_label)
             
             table.setItem(row_position, 0, QTableWidgetItem(row[1]))  # İsim
-            #table.setItem(row_position, 1, QTableWidgetItem(f"Fotoğraf - {row[1]}"))
             table.setItem(row_position, 2, QTableWidgetItem(row[3]))  # Giriş tarihi
             table.setItem(row_position, 3, QTableWidgetItem(str(row[4])))  # Süre
 
-            # Geri dön butonu
+        # Geri dön butonu
         back_button = QPushButton('Geri Dön')
         back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
         history_layout.addWidget(back_button)
 
+        # Yeni geçmiş sayfasını ekle
         self.stacked_widget.addWidget(history_page)
-        self.stacked_widget.setCurrentIndex(3)
+        self.stacked_widget.setCurrentIndex(self.stacked_widget.count() - 1)
 
     def update_time_limit(self):
         self.time_limit = self.time_limit_spinbox.value()
