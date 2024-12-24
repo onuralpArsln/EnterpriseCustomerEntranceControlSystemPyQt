@@ -13,6 +13,8 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
 
 class UserPhotoCaptureApp(QMainWindow):
+
+    
     def __init__(self):
         super().__init__()
         self.setWindowTitle('User Photo Management')
@@ -167,9 +169,11 @@ class UserPhotoCaptureApp(QMainWindow):
         main_layout.addWidget(self.stacked_widget, 3)
 
         # Kamera başlat
+        #cam_pipeline_str = self.__gstreamer_pipeline(camera_id=0, flip_method=2)
         self.capture = cv2.VideoCapture(0)
         if not self.capture.isOpened():
             self.camera_label.setText("Kamera erişilemiyor!")
+            self.killTimer(self.timer)
         else:
             self.timer = self.startTimer(30)
 
@@ -184,6 +188,53 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.fillPhotoStamps()
+
+    
+    
+    def __gstreamer_pipeline(
+        camera_id,
+        capture_width=1920,
+        capture_height=1080,
+        display_width=1920,
+        display_height=1080,
+        framerate=30,
+        flip_method=0,
+    ):
+        return (
+            "nvarguscamerasrc sensor-id=%d ! "
+            "video/x-raw(memory:NVMM), "
+            "width=(int)%d, height=(int)%d, "
+            "format=(string)NV12, framerate=(fraction)%d/1 ! "
+            "nvvidconv flip-method=%d ! "
+            "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
+            "videoconvert ! "
+            "video/x-raw, format=(string)BGR ! appsink max-buffers=1 drop=True"
+            % (
+                    camera_id,
+                    capture_width,
+                    capture_height,
+                    framerate,
+                    flip_method,
+                    display_width,
+                    display_height,
+            )
+    )
+
+    def timerEvent(self, event):
+        if self.capture.isOpened():
+            ret, frame = self.capture.read()
+            if ret:
+                # OpenCV'nin BGR formatından RGB formatına dönüştürme
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                # NumPy dizisini QImage'e dönüştürme
+                h, w, ch = rgb_frame.shape
+                bytes_per_line = ch * w
+                q_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
+                # QImage'i QLabel'e koyma
+                self.camera_label.setPixmap(QPixmap.fromImage(q_image))
+            else:
+                self.camera_label.setText("Kamera görüntüsü alınamıyor!")
+
 
     def create_table(self):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS users
@@ -215,7 +266,9 @@ class UserPhotoCaptureApp(QMainWindow):
     def load_user(self, item):
     # Kullanıcı adına tıklandığında, kullanıcı fotoğrafını yükle
         self.username = item.text()  # Listeden tıklanan kullanıcının adını al
-        photo_path = f'users/{self.username}.jpg'  # Fotoğrafın yolu
+        isim = self.username.split()[:-1]
+        pathname = " ".join(isim)
+        photo_path = f'users/{pathname}.jpg'  # Fotoğrafın yolu
 
     # Fotoğrafı göster
         if os.path.exists(photo_path):
@@ -243,6 +296,7 @@ class UserPhotoCaptureApp(QMainWindow):
         users.sort(reverse=True, key=lambda x: x[0])  # Tarihe göre sırala
         for _, username in users:
             self.user_list.addItem(username)
+
 
     def save_user_on_enter(self):
         name = self.name_input.text().strip()
