@@ -5,9 +5,9 @@ import time
 import numpy as np
 import sqlite3
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QLabel, QLineEdit, QWidget, QListWidget, 
+                             QPushButton, QLabel, QLineEdit, QWidget,
                              QStackedWidget, QSpinBox, QMessageBox, QTableWidget, 
-                             QTableWidgetItem,QComboBox)
+                             QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget)
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
@@ -79,19 +79,20 @@ class UserPhotoCaptureApp(QMainWindow):
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
 
+
         # Sol panel
         left_panel = QVBoxLayout()
 
         # Kullanıcı listesi
         self.user_list = QListWidget()
         self.user_list.itemClicked.connect(self.load_user)
-        left_panel.addWidget(QLabel('Şuanki Kullanıcılar:'))
-        left_panel.addWidget(self.user_list)
+        #left_panel.addWidget(QLabel('Şuanki Kullanıcılar:'))
+        #left_panel.addWidget(self.user_list)
 
         # Ayarlar ve Geçmiş butonları
-        settings_button = QPushButton('Ayarlar')
-        settings_button.clicked.connect(self.show_settings)
-        left_panel.addWidget(settings_button)
+        #settings_button = QPushButton('Ayarlar')
+        #settings_button.clicked.connect(self.show_settings)
+        #left_panel.addWidget(settings_button)
 
         history_button = QPushButton('Geçmiş')
         history_button.clicked.connect(self.show_history)
@@ -101,12 +102,12 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Sağ panel
         self.stacked_widget = QStackedWidget()
-
+        
         # Kamera sayfası
         capture_page = QWidget()
         capture_layout = QVBoxLayout()
         capture_page.setLayout(capture_layout)
-
+        '''
         self.camera_label = QLabel()
         self.camera_label.setMinimumSize(640, 480)
         self.camera_label.setStyleSheet("""
@@ -120,7 +121,15 @@ class UserPhotoCaptureApp(QMainWindow):
         """)
         self.camera_label.setAlignment(Qt.AlignCenter)
         capture_layout.addWidget(self.camera_label)
+        '''
+        # QGraphicsView ve Scene
+        self.view = QGraphicsView(self)
+        self.scene = QGraphicsScene(self)
+        self.view.setScene(self.scene)
 
+        # Layout'a View ekle
+        capture_layout.addWidget(self.view)
+        
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel('İsim:'))
         self.name_input = QLineEdit()
@@ -171,12 +180,12 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kamera başlat
         #cam_pipeline_str = self.__gstreamer_pipeline(camera_id=0, flip_method=2)
         self.capture = cv2.VideoCapture(0)
+        '''
         if not self.capture.isOpened():
             self.camera_label.setText("Kamera erişilemiyor!")
-            self.killTimer(self.timer)
         else:
             self.timer = self.startTimer(30)
-
+        '''
         # Kullanıcı zamanları
         self.photo_timestamps = {}
 
@@ -188,37 +197,14 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.fillPhotoStamps()
+        # Fotoğrafları yerleştireceğimiz bir liste
+        self.images = []
+        
+        # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
+        self.max_images = 10
+        self.columns = 5
+        self.rows = 2
 
-    
-    
-    def __gstreamer_pipeline(
-        camera_id,
-        capture_width=1920,
-        capture_height=1080,
-        display_width=1920,
-        display_height=1080,
-        framerate=30,
-        flip_method=0,
-    ):
-        return (
-            "nvarguscamerasrc sensor-id=%d ! "
-            "video/x-raw(memory:NVMM), "
-            "width=(int)%d, height=(int)%d, "
-            "format=(string)NV12, framerate=(fraction)%d/1 ! "
-            "nvvidconv flip-method=%d ! "
-            "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
-            "videoconvert ! "
-            "video/x-raw, format=(string)BGR ! appsink max-buffers=1 drop=True"
-            % (
-                    camera_id,
-                    capture_width,
-                    capture_height,
-                    framerate,
-                    flip_method,
-                    display_width,
-                    display_height,
-            )
-    )
 
     def timerEvent(self, event):
         if self.capture.isOpened():
@@ -236,6 +222,41 @@ class UserPhotoCaptureApp(QMainWindow):
                 self.camera_label.setText("Kamera görüntüsü alınamıyor!")
 
 
+    def update_scene_size(self):
+        # Scene boyutlarını, fotoğrafların en son eklenen pozisyonuna göre ayarla
+        if self.images:
+            max_x = max(item.pos().x() + item.pixmap().width() for item in self.images)
+            max_y = max(item.pos().y() + item.pixmap().height() for item in self.images)
+            self.scene.setSceneRect(0, 0, max_x + 10, max_y + 10)  # Biraz boşluk ekle
+
+            # View'ı güncelle ve fit et
+            self.view.setSceneRect(self.scene.sceneRect())
+            self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
+
+    def add_image(self, image_path):
+        # Fotoğrafı eklemek için ilk 10 fotoğrafı ekleyebiliriz
+        if len(self.images) < self.max_images:
+            pixmap = QPixmap(image_path)
+            pixmap_item = QGraphicsPixmapItem(pixmap)
+            
+            # Fotoğrafı doğru konumda yerleştir
+            row = len(self.images) // self.columns
+            col = len(self.images) % self.columns
+            pixmap_item.setPos(col * pixmap.width(), row * pixmap.height())
+
+            # Fotoğrafı sahneye ekle
+            self.scene.addItem(pixmap_item)
+            print(self.scene)
+
+            # Fotoğrafı listeye ekle
+            self.images.append(pixmap_item)
+            self.update_scene_size()
+            self.scene.update()
+
+
+        else:
+            print("Maksimum fotoğraf sayısına ulaşıldı.")
+
     def create_table(self):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS users
                                (id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT, photo BLOB, entry_date TEXT, time_limit INTEGER)''')
@@ -247,6 +268,7 @@ class UserPhotoCaptureApp(QMainWindow):
         settings.setValue("minute", self.minute_combo.currentText())
         settings.setValue("second", self.second_combo.currentText())
         self.update_time_limit()
+
 
     def load_settings(self):
         settings = QSettings("KralApp", "TimerSettings")
@@ -358,17 +380,17 @@ class UserPhotoCaptureApp(QMainWindow):
     def check_photo_timestamps(self):
         current_time = time.time()
         for filename, timestamp in list(self.photo_timestamps.items()):
-            if current_time - timestamp > self.time_limit:
+            if current_time - timestamp > self.time_limit - 300:
                 base_name = os.path.basename(filename)[:-4]
                 items = self.user_list.findItems(base_name, Qt.MatchExactly)
                 for item in items:
-                    item.setText(f"{base_name} ❗")
-                    item.setForeground(Qt.red)
-                    
+                    #item.setText(f"{base_name} ❗")
+                    #item.setForeground(Qt.red)
+                    self.add_image(f"/users/{base_name}.jpg")
                     # Yazıyı kalınlaştır
-                    font = item.font()
-                    font.setBold(True)
-                    item.setFont(font)
+                    #font = item.font()
+                    #font.setBold(True)
+                    #item.setFont(font)
 
     def fillPhotoStamps(self):
         self.cursor.execute("SELECT * FROM timetable")
