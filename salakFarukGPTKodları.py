@@ -181,6 +181,7 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.time_limit_start()
+        #self.delete_timers()
         self.load_timers()
 
         # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
@@ -297,8 +298,9 @@ class UserPhotoCaptureApp(QMainWindow):
         if index != -1:
             if self.image_grid.images[index].image_path == filename:
                 if self.image_grid.images[index].gettime() <= 0:
-                    self.save_to_database()
-                    self.image_grid.images.pop(self.image_grid.images[index])
+                    self.save_to_database(filename)
+                    self.image_grid.images.pop(index)
+                    self.image_grid.updateGrid()
                 else:
                     self.image_grid.images[index].setStopped()
             self.name_input.clear()
