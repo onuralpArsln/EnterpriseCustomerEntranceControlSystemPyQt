@@ -7,7 +7,7 @@ import sqlite3
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QLineEdit, QWidget,
                              QStackedWidget, QSpinBox, QMessageBox, QTableWidget, 
-                             QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget)
+                             QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget,QGridLayout)
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
@@ -90,9 +90,9 @@ class UserPhotoCaptureApp(QMainWindow):
         #left_panel.addWidget(self.user_list)
 
         # Ayarlar ve Geçmiş butonları
-        #settings_button = QPushButton('Ayarlar')
-        #settings_button.clicked.connect(self.show_settings)
-        #left_panel.addWidget(settings_button)
+        settings_button = QPushButton('Ayarlar')
+        settings_button.clicked.connect(self.show_settings)
+        left_panel.addWidget(settings_button)
 
         history_button = QPushButton('Geçmiş')
         history_button.clicked.connect(self.show_history)
@@ -107,28 +107,11 @@ class UserPhotoCaptureApp(QMainWindow):
         capture_page = QWidget()
         capture_layout = QVBoxLayout()
         capture_page.setLayout(capture_layout)
-        '''
-        self.camera_label = QLabel()
-        self.camera_label.setMinimumSize(640, 480)
-        self.camera_label.setStyleSheet("""
-            QLabel {
-                background-color: #000;
-                color: #fff;
-                font-size: 16px;
-                border: 3px solid #4CAF50;
-                border-radius: 10px;
-            }
-        """)
-        self.camera_label.setAlignment(Qt.AlignCenter)
-        capture_layout.addWidget(self.camera_label)
-        '''
-        # QGraphicsView ve Scene
-        self.view = QGraphicsView(self)
-        self.scene = QGraphicsScene(self)
-        self.view.setScene(self.scene)
 
-        # Layout'a View ekle
-        capture_layout.addWidget(self.view)
+        # ImageGrid widget
+        self.image_grid = ImageGrid()
+        capture_layout.addWidget(self.image_grid)
+
         
         name_layout = QHBoxLayout()
         name_layout.addWidget(QLabel('İsim:'))
@@ -197,8 +180,11 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.fillPhotoStamps()
+        self.time_limit_start()
         # Fotoğrafları yerleştireceğimiz bir liste
         self.images = []
+        self.image_paths = []
+        self.timers = []
         
         # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
         self.max_images = 10
@@ -232,30 +218,6 @@ class UserPhotoCaptureApp(QMainWindow):
             # View'ı güncelle ve fit et
             self.view.setSceneRect(self.scene.sceneRect())
             self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
-
-    def add_image(self, image_path):
-        # Fotoğrafı eklemek için ilk 10 fotoğrafı ekleyebiliriz
-        if len(self.images) < self.max_images:
-            pixmap = QPixmap(image_path)
-            pixmap_item = QGraphicsPixmapItem(pixmap)
-            
-            # Fotoğrafı doğru konumda yerleştir
-            row = len(self.images) // self.columns
-            col = len(self.images) % self.columns
-            pixmap_item.setPos(col * pixmap.width(), row * pixmap.height())
-
-            # Fotoğrafı sahneye ekle
-            self.scene.addItem(pixmap_item)
-            print(self.scene)
-
-            # Fotoğrafı listeye ekle
-            self.images.append(pixmap_item)
-            self.update_scene_size()
-            self.scene.update()
-
-
-        else:
-            print("Maksimum fotoğraf sayısına ulaşıldı.")
 
     def create_table(self):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS users
@@ -306,6 +268,14 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcı fotoğraf sayfasına geçiş yap
         self.stacked_widget.setCurrentIndex(1)
 
+    def time_limit_start(self):
+
+        settings = QSettings("KralApp", "TimerSettings")
+        hour = int(settings.value("hour", "0"))  # Varsayılan: 1 saat
+        minute = int(settings.value("minute", "0"))  # Varsayılan: 0 dakika
+        second = int(settings.value("second", "10"))  # Varsayılan: 10 saniye
+        
+        self.time_limit = (hour * 3600) + (minute * 60) + second
 
     def load_existing_users(self):
         self.user_list.clear()
@@ -358,7 +328,6 @@ class UserPhotoCaptureApp(QMainWindow):
             return
 
         filename = f'users/{name}.jpg'
-        print(name)
         photo_data = open(filename, 'rb').read()  # Fotoğrafı veritabanına ekle
         entry_date = time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time()))
         self.cursor.execute("INSERT INTO users (name, photo, entry_date, time_limit) VALUES (?, ?, ?, ?)",
@@ -386,7 +355,9 @@ class UserPhotoCaptureApp(QMainWindow):
                 for item in items:
                     #item.setText(f"{base_name} ❗")
                     #item.setForeground(Qt.red)
-                    self.add_image(f"/users/{base_name}.jpg")
+                    #self.add_image(f"/users/{base_name}.jpg")
+                    #print(f"{base_name} isimli kullanıcı {self.time_limit - (current_time - timestamp)} saniye içinde eklenmeli.")
+                    self.image_grid.addImage(f"users/{base_name}.jpg", max(0, int(self.time_limit - (current_time - timestamp))))
                     # Yazıyı kalınlaştır
                     #font = item.font()
                     #font.setBold(True)
@@ -565,11 +536,6 @@ class UserPhotoCaptureApp(QMainWindow):
         self.minute_combo.currentIndexChanged.connect(self.save_settings)
         self.second_combo.currentIndexChanged.connect(self.save_settings)
 
-
-
-
-
-
     def update_time_limit(self):
         hours = int(self.hour_combo.currentText())
         minutes = int(self.minute_combo.currentText())
@@ -582,6 +548,94 @@ class UserPhotoCaptureApp(QMainWindow):
     def closeEvent(self, event):
         self.capture.release()
         self.db.close()
+
+class ImageGrid(QWidget):
+
+
+    image_paths = []
+    max_images = 10
+
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.grid = QGridLayout()
+        self.setLayout(self.grid)
+        self.images = []
+
+        self.setFixedSize(720, 720)  # Set fixed size for the window
+        self.setWindowTitle('Image Grid')
+        self.show()
+
+    def addImage(self, image_path, time):
+
+        if (len(self.images) < self.max_images) and (image_path not in self.image_paths):
+
+            print(f"{image_path} fotoğrafı eklendi.")
+            pixmap = QPixmap(image_path)
+            imageWidget = ImageWidget(pixmap, time)
+            self.images.append(imageWidget)
+            self.image_paths.append(image_path)
+            self.updateGrid()
+
+
+        else:
+            pass
+
+            
+
+    def updateGrid(self):
+        for i in range(len(self.images)):
+            self.grid.addWidget(self.images[i], (i // 5) + 1, i % 5)
+
+        for i in range(len(self.images), 10):
+            self.grid.addWidget(QLabel(), (i // 5) + 1, i % 5)
+
+
+class ImageWidget(QWidget):
+    def __init__(self, pixmap, time_left, stopped):
+        super().__init__()
+        stopped = False
+        self.initUI(pixmap, time_left, stopped)
+
+
+    def initUI(self, pixmap, time_left, stopped):
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+        self.imageLabel = QLabel()
+        self.imageLabel.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
+        self.layout.addWidget(self.imageLabel)
+
+        self.timerLabel = QLabel('')
+        self.layout.addWidget(self.timerLabel)
+        self.layout.setSpacing(2)  # Reduce spacing between image and timer
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.updateTimer(stopped))
+        self.timeLeft = time_left  
+        self.startTimer(time_left)
+
+    def startTimer(self, time_left):
+        self.timeLeft = time_left 
+        self.updateTimerLabel()
+        self.timer.start(1000)
+
+    def updateTimer(self, stopped):
+        if self.timeLeft > 0 and stopped == False:
+            self.timeLeft -= 1
+        if self.timeLeft <= 0:
+            self.timer.stop()
+        print(self.timeLeft)
+        self.updateTimerLabel()
+        
+
+    def updateTimerLabel(self):
+        minutes, seconds = divmod(int(self.timeLeft), 60)
+        print(f'{minutes:02}:{seconds:02}')
+        self.timerLabel.setText(f'{minutes:02}:{seconds:02}')
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
