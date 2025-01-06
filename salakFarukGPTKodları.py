@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
+import pickle
 
 class UserPhotoCaptureApp(QMainWindow):
 
@@ -179,17 +180,11 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Kullanıcıları yükle
         self.load_existing_users()
-        self.fillPhotoStamps()
         self.time_limit_start()
-        # Fotoğrafları yerleştireceğimiz bir liste
-        self.images = []
-        self.image_paths = []
-        self.timers = []
-        
+        self.load_timers()
+
         # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
-        self.max_images = 10
-        self.columns = 5
-        self.rows = 2
+        self.count = 0
 
 
     def timerEvent(self, event):
@@ -297,6 +292,21 @@ class UserPhotoCaptureApp(QMainWindow):
 
         filename = f'users/{name}.jpg'
 
+        index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
+
+        if index != -1:
+            if self.image_grid.images[index].image_path == filename:
+                if self.image_grid.images[index].gettime() <= 0:
+                    self.save_to_database()
+                    self.image_grid.images.pop(self.image_grid.images[index])
+                else:
+                    self.image_grid.images[index].setStopped()
+            self.name_input.clear()
+            self.name_input.setFocus()
+            return
+        
+
+
         if self.capture.isOpened():
             ret, frame = self.capture.read()
             if ret:
@@ -308,37 +318,29 @@ class UserPhotoCaptureApp(QMainWindow):
             QMessageBox.warning(self, "Hata", "Kamera bağlantısı yok. Siyah bir görsel kaydediliyor.")
             self.save_black_image(filename)
 
-        self.photo_timestamps[filename] = time.time()
+        #self.photo_timestamps[filename] = time.time()
+        self.image_grid.addImage(filename, max(0, int(self.time_limit)))
         self.load_existing_users()
         self.name_input.clear()
         self.name_input.setFocus()
-        self.cursor.execute("INSERT INTO timetable (name, time) VALUES (?, ?)",
-                            (filename, self.photo_timestamps[filename]))
-        self.db.commit()
+        #self.cursor.execute("INSERT INTO timetable (name, time) VALUES (?, ?)",
+        #                    (filename, self.photo_timestamps[filename]))
+        #self.db.commit()
 
     def save_black_image(self, filepath):
         black_image = np.zeros((480, 640, 3), dtype=np.uint8)  # Siyah görüntü
         cv2.imwrite(filepath, black_image)
 
-    def save_to_database(self):
-        name = self.username.split()
-        name = name[0]
-        if not name:
+    def save_to_database(self, filename):
+        if not filename:
             print("nononon")
             return
 
-        filename = f'users/{name}.jpg'
         photo_data = open(filename, 'rb').read()  # Fotoğrafı veritabanına ekle
         entry_date = time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time()))
         self.cursor.execute("INSERT INTO users (name, photo, entry_date, time_limit) VALUES (?, ?, ?, ?)",
-                            (name, photo_data, entry_date, self.time_limit))
+                            (filename, photo_data, entry_date, self.time_limit))
         
-
-        sql = 'DELETE FROM timetable WHERE name = ?'
-        self.cursor.execute(sql, (name,))
-        self.db.commit()
-        self.load_existing_users()  # Listeyi güncelle
-        self.stacked_widget.setCurrentIndex(0)  # Ana sayfaya dön
         if os.path.exists(filename):
             os.remove(filename)  # Dosyayı siliyoruz
             print(f"{filename} dosyası başarıyla silindi.")
@@ -347,6 +349,14 @@ class UserPhotoCaptureApp(QMainWindow):
             print(f"{filename} dosyası bulunamadı.")
 
     def check_photo_timestamps(self):
+
+        self.count = self.count + 1
+        if self.count == 10:
+            self.count = 0
+            self.save_timers(self.image_grid.images)
+        
+            
+        '''
         current_time = time.time()
         for filename, timestamp in list(self.photo_timestamps.items()):
             if current_time - timestamp > self.time_limit - 300:
@@ -362,7 +372,7 @@ class UserPhotoCaptureApp(QMainWindow):
                     #font = item.font()
                     #font.setBold(True)
                     #item.setFont(font)
-
+    '''
     def fillPhotoStamps(self):
         self.cursor.execute("SELECT * FROM timetable")
         rows = self.cursor.fetchall()
@@ -549,10 +559,35 @@ class UserPhotoCaptureApp(QMainWindow):
         self.capture.release()
         self.db.close()
 
+    def save_timers(self, my_list):
+        settings = QSettings("KralApp", "TimerSettings")
+        # Store only the necessary data for each image
+        image_data = [(image.image_path, image.timeLeft, image.stopped) for image in my_list]
+        settings.setValue("timers", pickle.dumps(image_data))
+        print("Timers saved")
+
+    def load_timers(self):
+
+        settings = QSettings("KralApp", "TimerSettings")
+        saved_data = settings.value("timers")
+        if saved_data:
+            image_data = pickle.loads(saved_data)
+            
+            for image_path, time_left, stopped in image_data:
+                pixmap = QPixmap(image_path)
+                imageWidget = ImageWidget(pixmap, time_left, image_path, stopped)
+                self.image_grid.images.append(imageWidget)
+                self.image_grid.updateGrid()
+            print("Timers loaded")
+    
+    def delete_timers(self):
+        settings = QSettings("KralApp", "TimerSettings")
+        settings.remove("timers")
+        print("Timers deleted")
+
 class ImageGrid(QWidget):
 
 
-    image_paths = []
     max_images = 10
 
     def __init__(self):
@@ -570,42 +605,39 @@ class ImageGrid(QWidget):
 
     def addImage(self, image_path, time):
 
-        if (len(self.images) < self.max_images) and (image_path not in self.image_paths):
-
+        if not any(image.image_path == image_path for image in self.images):
             print(f"{image_path} fotoğrafı eklendi.")
             pixmap = QPixmap(image_path)
-            imageWidget = ImageWidget(pixmap, time)
+            imageWidget = ImageWidget(pixmap, time, image_path, False)
             self.images.append(imageWidget)
-            self.image_paths.append(image_path)
             self.updateGrid()
-
-
         else:
             pass
 
-            
+    
 
     def updateGrid(self):
-        for i in range(len(self.images)):
+        for i in range(min(len(self.images), 10)):
             self.grid.addWidget(self.images[i], (i // 5) + 1, i % 5)
 
-        for i in range(len(self.images), 10):
+        for i in range(min(len(self.images), 10)):
             self.grid.addWidget(QLabel(), (i // 5) + 1, i % 5)
 
 
 class ImageWidget(QWidget):
-    def __init__(self, pixmap, time_left, stopped):
+    def __init__(self, pixmap, time_left, image_path, stopped):
         super().__init__()
-        stopped = False
-        self.initUI(pixmap, time_left, stopped)
+        self.stopped = stopped
+        self.image_path = image_path
+        self.initUI(pixmap, time_left, image_path)
 
 
-    def initUI(self, pixmap, time_left, stopped):
+    def initUI(self, pixmap, time_left, image_path):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
         self.imageLabel = QLabel()
-        self.imageLabel.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
+        self.imageLabel.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))
         self.layout.addWidget(self.imageLabel)
 
         self.timerLabel = QLabel('')
@@ -613,7 +645,7 @@ class ImageWidget(QWidget):
         self.layout.setSpacing(2)  # Reduce spacing between image and timer
 
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self.updateTimer(stopped))
+        self.timer.timeout.connect(self.updateTimer)
         self.timeLeft = time_left  
         self.startTimer(time_left)
 
@@ -622,19 +654,24 @@ class ImageWidget(QWidget):
         self.updateTimerLabel()
         self.timer.start(1000)
 
-    def updateTimer(self, stopped):
-        if self.timeLeft > 0 and stopped == False:
+    def updateTimer(self):
+        if self.timeLeft > 0 and self.stopped == False:
             self.timeLeft -= 1
         if self.timeLeft <= 0:
             self.timer.stop()
-        print(self.timeLeft)
         self.updateTimerLabel()
         
 
     def updateTimerLabel(self):
         minutes, seconds = divmod(int(self.timeLeft), 60)
-        print(f'{minutes:02}:{seconds:02}')
         self.timerLabel.setText(f'{minutes:02}:{seconds:02}')
+
+    def setStopped(self):
+        self.stopped = not self.stopped
+
+    def gettime(self):
+        return self.timeLeft
+
 
 
 if __name__ == "__main__":

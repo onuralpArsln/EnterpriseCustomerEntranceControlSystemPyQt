@@ -1,5 +1,5 @@
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QLabel, QFileDialog, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QLabel, QFileDialog, QVBoxLayout
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import QTimer, Qt
 
@@ -68,11 +68,15 @@ class ImageGrid(QWidget):
             self.updateGrid()
 
     def updateGrid(self):
-        for i in range(len(self.images)):
-            self.grid.addWidget(self.images[i], (i // 5) + 1, i % 5)
+        # Clear the grid layout except for the add button
+        for i in reversed(range(1, self.grid.count())):
+            widget = self.grid.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
 
-        for i in range(len(self.images), 10):
-            self.grid.addWidget(QLabel(), (i // 5) + 1, i % 5)
+        # Display only the first 10 images
+        for i in range(min(len(self.images), 10)):
+            self.grid.addWidget(self.images[i], (i // 5) + 1, i % 5)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
