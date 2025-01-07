@@ -299,6 +299,7 @@ class UserPhotoCaptureApp(QMainWindow):
             if self.image_grid.images[index].image_path == filename:
                 if self.image_grid.images[index].gettime() <= 0:
                     self.save_to_database(filename)
+                    self.image_grid.images[index].removeTimerLabel()
                     self.image_grid.images.pop(index)
                     self.image_grid.updateGrid()
                 else:
@@ -356,6 +357,8 @@ class UserPhotoCaptureApp(QMainWindow):
         if self.count == 10:
             self.count = 0
             self.save_timers(self.image_grid.images)
+            self.image_grid.images.sort(key=lambda image: image.timeLeft)
+            self.image_grid.updateGrid()
         
             
         '''
@@ -667,6 +670,9 @@ class ImageWidget(QWidget):
     def updateTimerLabel(self):
         minutes, seconds = divmod(int(self.timeLeft), 60)
         self.timerLabel.setText(f'{minutes:02}:{seconds:02}')
+    
+    def removeTimerLabel(self):
+        self.timerLabel.setText('')
 
     def setStopped(self):
         self.stopped = not self.stopped
