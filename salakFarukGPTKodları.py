@@ -27,8 +27,10 @@ class UserPhotoCaptureApp(QMainWindow):
                 background-color: #f0f0f5;
             }
             QLabel {
-                font-size: 14px;
+                font-size: 36px;
                 color: #333;
+                margin: 0px;
+                padding: 0px;
             }
             QPushButton {
                 font-size: 14px;
@@ -184,7 +186,6 @@ class UserPhotoCaptureApp(QMainWindow):
         self.delete_timers()
         self.load_timers()
 
-        # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
         self.count = 0
         self.name_input.setFocus()
 
@@ -605,7 +606,7 @@ class ImageGrid(QWidget):
         self.setLayout(self.grid)
         self.images = []
 
-        self.setFixedSize(720, 720)  # Set fixed size for the window
+        self.setFixedSize(1440, 1080)  # Set fixed size for the window
         self.setWindowTitle('Image Grid')
         self.show()
 
@@ -640,13 +641,21 @@ class ImageWidget(QWidget):
 
     def initUI(self, pixmap, time_left, image_path):
         self.layout = QVBoxLayout()
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.layout)
 
         self.imageLabel = QLabel()
-        self.imageLabel.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))
+        self.imageLabel.setPixmap(pixmap.scaled(500, 500, Qt.KeepAspectRatio))
+        self.imageLabel.setStyleSheet("margin: 0px; padding: 0px;")
         self.layout.addWidget(self.imageLabel)
 
         self.timerLabel = QLabel()
+        self.timerLabel.setStyleSheet("""
+            margin-bottom: 10px;
+            margin-left: 15px;
+            padding: 0px;
+        """)
         self.layout.addWidget(self.timerLabel)
 
         self.timer = QTimer(self)
