@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout
                              QPushButton, QLabel, QLineEdit, QWidget,
                              QStackedWidget, QSpinBox, QMessageBox, QTableWidget, 
                              QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget,QGridLayout)
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap,QPainter
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
 import pickle
@@ -181,12 +181,12 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.time_limit_start()
-        #self.delete_timers()
+        self.delete_timers()
         self.load_timers()
 
         # Fotoğrafların sıralama düzenini belirle (2 satır, 5 sütun)
         self.count = 0
-
+        self.name_input.setFocus()
 
     def timerEvent(self, event):
         if self.capture.isOpened():
@@ -299,6 +299,7 @@ class UserPhotoCaptureApp(QMainWindow):
             if self.image_grid.images[index].image_path == filename:
                 if self.image_grid.images[index].gettime() <= 0:
                     self.save_to_database(filename)
+                    self.image_grid.images[index].removeOverlay()
                     self.image_grid.images[index].removeTimerLabel()
                     self.image_grid.images.pop(index)
                     self.image_grid.updateGrid()
@@ -645,9 +646,8 @@ class ImageWidget(QWidget):
         self.imageLabel.setPixmap(pixmap.scaled(300, 300, Qt.KeepAspectRatio))
         self.layout.addWidget(self.imageLabel)
 
-        self.timerLabel = QLabel('')
+        self.timerLabel = QLabel()
         self.layout.addWidget(self.timerLabel)
-        self.layout.setSpacing(2)  # Reduce spacing between image and timer
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateTimer)
@@ -663,6 +663,13 @@ class ImageWidget(QWidget):
         if self.timeLeft > 0 and self.stopped == False:
             self.timeLeft -= 1
         if self.timeLeft <= 0:
+            self.overlay = QPixmap(self.imageLabel.pixmap().size())
+            self.overlay.fill(Qt.red)
+            painter = QPainter(self.overlay)
+            painter.setOpacity(0.7)
+            painter.drawPixmap(0, 0, self.imageLabel.pixmap())
+            painter.end()
+            self.imageLabel.setPixmap(self.overlay)
             self.timer.stop()
         self.updateTimerLabel()
         
@@ -673,6 +680,12 @@ class ImageWidget(QWidget):
     
     def removeTimerLabel(self):
         self.timerLabel.setText('')
+
+    def removeOverlay(self):
+        if self.imageLabel is not None:
+            self.layout.removeWidget(self.imageLabel)
+            self.imageLabel.deleteLater()
+            self.imageLabel = None
 
     def setStopped(self):
         self.stopped = not self.stopped
