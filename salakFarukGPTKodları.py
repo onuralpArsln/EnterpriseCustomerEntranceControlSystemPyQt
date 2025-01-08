@@ -12,6 +12,8 @@ from PyQt5.QtGui import QImage, QPixmap,QPainter
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
 import pickle
+from playsound import playsound
+
 
 class UserPhotoCaptureApp(QMainWindow):
 
@@ -183,7 +185,7 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         self.load_existing_users()
         self.time_limit_start()
-        self.delete_timers()
+        #self.delete_timers()
         self.load_timers()
 
         self.count = 0
@@ -680,6 +682,7 @@ class ImageWidget(QWidget):
             painter.end()
             self.imageLabel.setPixmap(self.overlay)
             self.timer.stop()
+            playsound('audio/alarm.wav')
         self.updateTimerLabel()
         
 
