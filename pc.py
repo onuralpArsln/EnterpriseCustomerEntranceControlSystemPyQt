@@ -1,5 +1,6 @@
 import sys
 import os
+import proto
 import cv2
 import time
 import numpy as np
@@ -13,6 +14,8 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
 import pickle
 from playsound import playsound
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 
 class UserPhotoCaptureApp(QMainWindow):
@@ -29,7 +32,7 @@ class UserPhotoCaptureApp(QMainWindow):
                 background-color: #f0f0f5;
             }
             QLabel {
-                font-size: 36px;
+                font-size: 28px;
                 color: #333;
                 margin: 0px;
                 padding: 0px;
@@ -84,7 +87,7 @@ class UserPhotoCaptureApp(QMainWindow):
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
 
-        '''
+        
         # Sol panel
         left_panel = QVBoxLayout()
 
@@ -104,7 +107,7 @@ class UserPhotoCaptureApp(QMainWindow):
         left_panel.addWidget(history_button)
 
         main_layout.addLayout(left_panel, 1)
-        '''
+        
         # Sağ panel
         self.stacked_widget = QStackedWidget()
         
@@ -112,19 +115,19 @@ class UserPhotoCaptureApp(QMainWindow):
         capture_page = QWidget()
         capture_layout = QVBoxLayout()
         capture_page.setLayout(capture_layout)
-
+        '''
         # ImageGrid widget
         self.image_grid = ImageGrid()
         capture_layout.addWidget(self.image_grid)
-
+        '''
         
         name_layout = QHBoxLayout()
-        name_layout.addWidget(QLabel('İsim:'))
+        name_layout.addWidget(QLabel('Kartı Okutunuz:'))
         self.name_input = QLineEdit()
         self.name_input.returnPressed.connect(self.save_user_on_enter)
         name_layout.addWidget(self.name_input)
         capture_layout.addLayout(name_layout)
-
+        
         # Kullanıcı gösterimi sayfası
         user_display_page = QWidget()
         user_display_layout = QVBoxLayout()
@@ -178,15 +181,15 @@ class UserPhotoCaptureApp(QMainWindow):
         self.photo_timestamps = {}
 
         # Zaman kontrolü
-        self.check_timer = QTimer()
-        self.check_timer.timeout.connect(self.check_photo_timestamps)
-        self.check_timer.start(1000)
+        #self.check_timer = QTimer()
+        #self.check_timer.timeout.connect(self.check_photo_timestamps)
+        #self.check_timer.start(1000)
 
         # Kullanıcıları yükle
         #self.load_existing_users()
         self.time_limit_start()
         #self.delete_timers()
-        self.load_timers()
+        #self.load_timers()
 
         self.count = 0
         self.name_input.setFocus()
@@ -293,11 +296,22 @@ class UserPhotoCaptureApp(QMainWindow):
         name = self.name_input.text().strip()
         if not name:
             return
+        # Firebase yapılandırması
+        cred = credentials.Certificate("credentials.json")
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
 
-        filename = f'users/{name}.jpg'
+        # Veriyi Firestore'a kaydet
+        data = {
+            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+            'id': name,
+            'time': self.time_limit
+        }
+        db.collection('users').add(data)
+        #filename = f'users/{name}.jpg'
 
-        index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
-
+        #index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
+        '''
         if index != -1:
             if self.image_grid.images[index].image_path == filename:
                 if self.image_grid.images[index].gettime() <= 0:
@@ -324,9 +338,9 @@ class UserPhotoCaptureApp(QMainWindow):
         else:
             QMessageBox.warning(self, "Hata", "Kamera bağlantısı yok. Siyah bir görsel kaydediliyor.")
             self.save_black_image(filename)
-
+        '''
         #self.photo_timestamps[filename] = time.time()
-        self.image_grid.addImage(filename, max(0, int(self.time_limit)))
+        #self.image_grid.addImage(filename, max(0, int(self.time_limit)))
         #self.load_existing_users()
         self.name_input.clear()
         self.name_input.setFocus()
