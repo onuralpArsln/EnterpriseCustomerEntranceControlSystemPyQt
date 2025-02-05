@@ -392,10 +392,10 @@ class UserPhotoCaptureApp(QMainWindow):
                             if ret:
                                 cv2.imwrite(filename, frame)
                             else:
-                                QMessageBox.warning(self, "Hata", "Kamera görüntüsü alınamadı. Siyah bir görsel kaydediliyor.")
+                                print("Gamara yok siyah görsel kaydediliyor.")
                                 self.save_black_image(filename)
                         else:
-                            QMessageBox.warning(self, "Hata", "Kamera bağlantısı yok. Siyah bir görsel kaydediliyor.")
+                            print("Açılamadı siyah görsel kaydediliyor.")
                             self.save_black_image(filename)
                         
                         self.photo_timestamps[filename] = time.time()
@@ -733,8 +733,12 @@ class ImageWidget(QWidget):
         
 
     def updateTimerLabel(self):
-        minutes, seconds = divmod(int(self.timeLeft), 60)
-        self.timerLabel.setText(f'{minutes:02}:{seconds:02}')
+        hours, remainder = divmod(int(self.timeLeft), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if hours == 0:
+            self.timerLabel.setText(f'{minutes:02}:{seconds:02}')
+        else:
+            self.timerLabel.setText(f'{hours:02}:{minutes:02}')
     
     def removeTimerLabel(self):
         self.timerLabel.setText('')
