@@ -1,84 +1,82 @@
-import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QGridLayout, QPushButton, QLabel, QFileDialog, QVBoxLayout
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import QTimer, Qt
+import board
+import busio
+from adafruit_pn532.i2c import PN532_I2C
+import time
 
-class ImageWidget(QWidget):
-    def __init__(self, pixmap):
-        super().__init__()
-        self.initUI(pixmap)
 
-    def initUI(self, pixmap):
-        self.layout = QVBoxLayout()
-        self.setLayout(self.layout)
 
-        self.imageLabel = QLabel()
-        self.imageLabel.setPixmap(pixmap.scaled(200, 200, Qt.KeepAspectRatio))
-        self.layout.addWidget(self.imageLabel)
+#uart = serial.Serial("/dev/serial0", baudrate=115200, timeout=1)
 
-        self.timerLabel = QLabel('Timer: 05:00')
-        self.layout.addWidget(self.timerLabel)
-        self.layout.setSpacing(2)  # Reduce spacing between image and timer
 
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.updateTimer)
-        self.timeLeft = 300  # 5 minutes in seconds
-        self.startTimer()
+i2c = busio.I2C(board.SCL, board.SDA)
+pn532 = PN532_I2C(i2c, debug = False)
 
-    def startTimer(self):
-        self.timeLeft = 300  # 5 minutes in seconds
-        self.updateTimerLabel()
-        self.timer.start(1000)
+ic, ver, rev, support = pn532.firmware_version
+print("format: {0}.{1}".format(ver,rev))
 
-    def updateTimer(self):
-        self.timeLeft -= 1
-        self.updateTimerLabel()
-        if self.timeLeft == 0:
-            self.timer.stop()
+pn532.SAM_configuration()
 
-    def updateTimerLabel(self):
-        minutes, seconds = divmod(self.timeLeft, 60)
-        self.timerLabel.setText(f'Timer: {minutes:02}:{seconds:02}')
+user = input("Sayı: ")
 
-class ImageGrid(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.initUI()
+def read():
+    data = pn532.mifare_classic_read_block(6)  
+    print("Okurken ki data burası: ", data)
+    if data:
+        data_dec = int("".join(f"{x:02X}" for x in data), 16)
+        if data_dec == 0:
+            print("kart boş")
+            return 0
+        else:
+            print("data var")
+            return data
+    else:
+        return 0
 
-    def initUI(self):
-        self.grid = QGridLayout()
-        self.setLayout(self.grid)
-        self.images = []
 
-        self.addButton = QPushButton('Add Image')
-        self.addButton.clicked.connect(self.addImage)
-        self.grid.addWidget(self.addButton, 0, 0, 1, 5)
+def clear():
+    empty = bytearray([0x00] * 16)
+    try:
+        pn532.mifare_classic_write_block(6, empty)
+        print("Temizleme başarılı.")
+    except Exception as e:
+        print("Temizlerken hata: ", e)
 
-        self.setFixedSize(520, 520)  # Set fixed size for the window
-        self.setWindowTitle('Image Grid')
-        self.show()
+def write(uid ,number):
+    number_str = str(number)
+    byte_data = bytearray(number_str.encode('utf-8'))
+    while len(byte_data) < 16:
+        byte_data.append(0x00)
+    key = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+    authenticated = pn532.mifare_classic_authenticate_block(uid, 6, 0x60, key)
+    
+    if not authenticated:
+        print("Doğrulama başarısız")
+        return
+    else:
+        print("Doğruladım")
+    
 
-    def addImage(self):
-        options = QFileDialog.Options()
-        fileName, _ = QFileDialog.getOpenFileName(self, "Open Image File", "", "Image Files (*.png *.jpg *.bmp)", options=options)
-        if fileName:
-            pixmap = QPixmap(fileName)
-            imageWidget = ImageWidget(pixmap)
-            self.images.append(imageWidget)
-            self.updateGrid()
+    try:
+        print(pn532.mifare_classic_write_block(6, byte_data))
+        print("Yazma başarılı.")
+    except Exception as e:
+        print("Yazma hatalı: ", e)
 
-    def updateGrid(self):
-        # Clear the grid layout except for the add button
-        for i in reversed(range(1, self.grid.count())):
-            widget = self.grid.itemAt(i).widget()
-            if widget:
-                widget.setParent(None)
-
-        # Display only the first 10 images
-        for i in range(min(len(self.images), 10)):
-            self.grid.addWidget(self.images[i], (i // 5) + 1, i % 5)
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    ex = ImageGrid()
-    sys.exit(app.exec_())
+while True:
+    uid = pn532.read_passive_target(timeout=3)
+    if uid is None:
+        continue
+    decimal = int("".join(f"{x:02X}" for x in uid), 16)
+    print("Kart: ", decimal)
+    deneme = int.from_bytes(uid, "little")
+    deneme = str(deneme).zfill(10)
+    print("UID: ", uid)
+    print("Yeni Kart: ", deneme)
+    data = read()
+    if data == 0 or data == None:
+        print("Salağım yazmaya girdim ve data: ", data)
+        write(uid ,user)
+    else:
+        print("Data var ve: ", data)
+        clear()
+    time.sleep(2) 

@@ -188,6 +188,9 @@ class UserPhotoCaptureApp(QMainWindow):
         # Kullanıcıları yükle
         #self.load_existing_users()
         self.time_limit_start()
+        cred = credentials.Certificate("credentials.json")
+        firebase_admin.initialize_app(cred)
+        self.db = firestore.client()
         #self.delete_timers()
         #self.load_timers()
 
@@ -297,9 +300,7 @@ class UserPhotoCaptureApp(QMainWindow):
         if not name:
             return
         # Firebase yapılandırması
-        cred = credentials.Certificate("credentials.json")
-        firebase_admin.initialize_app(cred)
-        db = firestore.client()
+        
 
         # Veriyi Firestore'a kaydet
         data = {
@@ -307,7 +308,9 @@ class UserPhotoCaptureApp(QMainWindow):
             'id': name,
             'time': self.time_limit
         }
-        db.collection('users').add(data)
+        self.db.collection('users').add(data)
+        #QMessageBox.warning(self, "Başarılı", "Sisteme Kayıt Başarılı.")
+        QMessageBox.information(self, "Başarılı", "Sisteme Kayıt Başarılı.")
         #filename = f'users/{name}.jpg'
 
         #index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
