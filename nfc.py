@@ -198,7 +198,7 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Kullanıcıları yükle
         #self.load_existing_users()
-        self.time_limit_start()
+        #self.time_limit_start()
         cred = credentials.Certificate("credentials.json")
         firebase_admin.initialize_app(cred)
         self.db = firestore.client()

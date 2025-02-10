@@ -231,7 +231,7 @@ class UserPhotoCaptureApp(QMainWindow):
 
     def save_settings(self):
         settings = QSettings("KralApp", "TimerSettings")  # Uygulama ve ayar adı
-        settings.setValue("hour", self.hour_combo.currentText())
+        settings.setValue("hour", self.hour_combo.currentIndex())
         #settings.setValue("minute", self.minute_combo.currentText())
         #settings.setValue("second", self.second_combo.currentText())
         self.update_time_limit()
@@ -239,11 +239,11 @@ class UserPhotoCaptureApp(QMainWindow):
 
     def load_settings(self):
         settings = QSettings("KralApp", "TimerSettings")
-        hour = settings.value("hour", "30 Dakika")  # Varsayılan: 1 saat
+        hour = settings.value("hour", 0)  # Varsayılan: 1 saat
         #minute = settings.value("minute", "0")  # Varsayılan: 0 dakika
         #second = settings.value("second", "10")  # Varsayılan: 10 saniye
 
-        self.hour_combo.setCurrentText(hour)
+        self.hour_combo.setCurrentIndex(hour)
         #self.minute_combo.setCurrentText(minute)
         #self.second_combo.setCurrentText(second)
 
@@ -276,11 +276,17 @@ class UserPhotoCaptureApp(QMainWindow):
     def time_limit_start(self):
 
         settings = QSettings("KralApp", "TimerSettings")
-        hour = int(settings.value("hour", "0"))  # Varsayılan: 1 saat
+        hour = int(settings.value("hour", 0))  # Varsayılan: 1 saat
+        '''
         minute = int(settings.value("minute", "0"))  # Varsayılan: 0 dakika
         second = int(settings.value("second", "10"))  # Varsayılan: 10 saniye
+        '''
         
-        self.time_limit = (hour * 3600) + (minute * 60) + second
+        if self.time_limit == 0:
+            self.time_limit = 1800  # Varsayılan: 30 dakika
+        else:
+            self.time_limit = (hour * 3600)
+        print(f"Yeni zaman sınırı: {self.time_limit} saniye")
 
     def load_existing_users(self):
         self.user_list.clear()
@@ -482,7 +488,7 @@ class UserPhotoCaptureApp(QMainWindow):
         # Saat ComboBox
         self.hour_combo = QComboBox()
         self.hour_combo.addItems(["30 Dakika", "1 Saat", "2 Saat", "3 Saat", "4 Saat", "5 Saat", "6 Saat"])
-        self.hour_combo.setCurrentIndex(0)
+        self.hour_combo.setCurrentIndex(self.findTimeIndex())
         '''
         # Dakika ComboBox
         self.minute_combo = QComboBox()
@@ -587,6 +593,13 @@ class UserPhotoCaptureApp(QMainWindow):
     def closeEvent(self, event):
         self.capture.release()
         self.db.close()
+
+    def findTimeIndex(self):
+        timer = self.time_limit
+        if timer == 1800:
+            return 0
+        else:
+            return timer // 3600
 
     def save_timers(self, my_list):
         settings = QSettings("KralApp", "TimerSettings")
