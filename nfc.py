@@ -375,6 +375,14 @@ class UserPhotoCaptureApp(QMainWindow):
                             'time': self.image_grid.images[index].gettime()
                         }
                         self.db.collection('users').add(data)
+
+                        data2 = {
+                            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+                            'id': uid,
+                            'io': "Çıkış",
+                            "remaining": self.image_grid.images[index].gettime()
+                        }
+                        self.db.collection('list').add(data2)
                         self.image_grid.images[index].removeOverlay()
                         self.image_grid.images[index].removeTimerLabel()
                         self.image_grid.images.pop(index)
@@ -400,6 +408,13 @@ class UserPhotoCaptureApp(QMainWindow):
                         
                         self.photo_timestamps[filename] = time.time()
                         self.image_grid.addImage(filename, max(0, int(time_value)))
+                        data2 = {
+                            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+                            'id': uid,
+                            'io': "Giriş",
+                            "remaining": int(time_value)
+                        }
+                        self.db.collection('list').add(data2)
                         break
                     else:
                         print(f"User {uid} not found in Firestore")

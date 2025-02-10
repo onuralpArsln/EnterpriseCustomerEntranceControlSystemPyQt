@@ -315,6 +315,8 @@ class UserPhotoCaptureApp(QMainWindow):
             'time': self.time_limit
         }
         self.db.collection('users').add(data)
+        self.db.collection('history').add(data)
+
         #QMessageBox.warning(self, "Başarılı", "Sisteme Kayıt Başarılı.")
         QMessageBox.information(self, "Başarılı", "Sisteme Kayıt Başarılı.")
         #filename = f'users/{name}.jpg'
