@@ -509,6 +509,7 @@ class UserPhotoCaptureApp(QMainWindow):
         statistics_layout.addWidget(self.calendar, alignment=Qt.AlignCenter)
 
         # İstatistik etiketlerini ekle
+        stats_grid_layout = QGridLayout()
         self.total_hours_label = QLabel("Toplam Saat: 0")
         self.total_people_label = QLabel("Toplam Kişi: 0")
         self.thirty_minutes_label = QLabel("30 Dakika: 0")
@@ -519,15 +520,17 @@ class UserPhotoCaptureApp(QMainWindow):
         self.five_hours_label = QLabel("5 Saat: 0")
         self.six_hours_label = QLabel("6 Saat: 0")
 
-        statistics_layout.addWidget(self.total_hours_label)
-        statistics_layout.addWidget(self.total_people_label)
-        statistics_layout.addWidget(self.thirty_minutes_label)
-        statistics_layout.addWidget(self.one_hour_label)
-        statistics_layout.addWidget(self.two_hours_label)
-        statistics_layout.addWidget(self.three_hours_label)
-        statistics_layout.addWidget(self.four_hours_label)
-        statistics_layout.addWidget(self.five_hours_label)
-        statistics_layout.addWidget(self.six_hours_label)
+        stats_grid_layout.addWidget(self.total_hours_label, 0, 0)
+        stats_grid_layout.addWidget(self.total_people_label, 1, 0)
+        stats_grid_layout.addWidget(self.thirty_minutes_label, 2, 0)
+        stats_grid_layout.addWidget(self.one_hour_label, 3, 0)
+        stats_grid_layout.addWidget(self.two_hours_label, 0, 1)
+        stats_grid_layout.addWidget(self.three_hours_label, 1, 1)
+        stats_grid_layout.addWidget(self.four_hours_label, 2, 1)
+        stats_grid_layout.addWidget(self.five_hours_label, 3, 1)
+        stats_grid_layout.addWidget(self.six_hours_label, 4, 1)
+
+        statistics_layout.addLayout(stats_grid_layout)
 
         # Geri dön butonu
         back_button = QPushButton('Geri Dön')
