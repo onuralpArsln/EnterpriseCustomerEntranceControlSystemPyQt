@@ -1,3 +1,4 @@
+import datetime
 import sys
 import os
 import proto
@@ -8,7 +9,7 @@ import sqlite3
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QLineEdit, QWidget,
                              QStackedWidget, QSpinBox, QMessageBox, QTableWidget, 
-                             QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget,QGridLayout)
+                             QTableWidgetItem, QComboBox, QGraphicsScene, QGraphicsView, QGraphicsPixmapItem, QFileDialog, QListWidget, QGridLayout, QCalendarWidget, QHeaderView)
 from PyQt5.QtGui import QImage, QPixmap,QPainter
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtCore import QSettings
@@ -24,7 +25,7 @@ class UserPhotoCaptureApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('User Photo Management')
-        self.setGeometry(100, 100, 800, 600)
+        self.showFullScreen()
 
         # ** Genel Stil Uygulaması **
         self.setStyleSheet("""
@@ -99,12 +100,19 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Ayarlar ve Geçmiş butonları
         settings_button = QPushButton('Ayarlar')
+        settings_button.setFixedSize(200, 60)  # Buton boyutunu ayarla
         settings_button.clicked.connect(self.show_settings)
         left_panel.addWidget(settings_button)
 
         history_button = QPushButton('Geçmiş')
+        history_button.setFixedSize(200, 60)  # Buton boyutunu ayarla
         history_button.clicked.connect(self.show_history)
         left_panel.addWidget(history_button)
+
+        statistics_button = QPushButton('İstatistikler')
+        statistics_button.setFixedSize(200, 60)  # Buton boyutunu ayarla
+        statistics_button.clicked.connect(self.show_statistics)
+        left_panel.addWidget(statistics_button)
 
         main_layout.addLayout(left_panel, 1)
         
@@ -432,37 +440,20 @@ class UserPhotoCaptureApp(QMainWindow):
         history_layout = QVBoxLayout()
         history_page.setLayout(history_layout)
 
+        # Takvim widget'ı ekle
+        self.calendar = QCalendarWidget()
+        self.calendar.setGridVisible(True)
+        self.calendar.setFixedSize(800, 400)  # Set fixed size for the calendar
+        self.calendar.clicked.connect(self.load_history_data)
+        history_layout.addWidget(self.calendar, alignment=Qt.AlignCenter)
+
         # Geçmiş kaydını tabloya ekle
-        table = QTableWidget()
-        table.setColumnCount(4)
-        table.setHorizontalHeaderLabels(["İsim", "Fotoğraf", "Giriş Tarihi", "Süre"])
-        history_layout.addWidget(table)
-
-        # Veritabanından verileri al
-        self.cursor.execute("SELECT * FROM users")
-        rows = self.cursor.fetchall()
-        for row in rows:
-            photo_data = row[2]
-            row_position = table.rowCount()
-            table.insertRow(row_position)
-            if photo_data:
-                # BLOB verisini QPixmap nesnesine dönüştür
-                photo = QPixmap()
-                photo.loadFromData(photo_data)
-
-                # Küçük boyutta göster
-                photo = photo.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-
-                # Fotoğrafı QLabel'e ekle
-                photo_label = QLabel()
-                photo_label.setPixmap(photo)
-
-                # Fotoğrafı tablo hücresine yerleştir
-                table.setCellWidget(row_position, 1, photo_label)
-            
-            table.setItem(row_position, 0, QTableWidgetItem(row[1]))  # İsim
-            table.setItem(row_position, 2, QTableWidgetItem(row[3]))  # Giriş tarihi
-            table.setItem(row_position, 3, QTableWidgetItem(str(row[4])))  # Süre
+        self.table = QTableWidget()
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["İsim", "Tarih", "Giriş/Çıkış", "Süre"])
+        self.table.horizontalHeader().setStretchLastSection(True)  # Son sütunu genişlet
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # Tüm sütunları genişlet
+        history_layout.addWidget(self.table)
 
         # Geri dön butonu
         back_button = QPushButton('Geri Dön')
@@ -473,6 +464,129 @@ class UserPhotoCaptureApp(QMainWindow):
         self.stacked_widget.addWidget(history_page)
         self.stacked_widget.setCurrentIndex(self.stacked_widget.count() - 1)
 
+        # Varsayılan olarak bugünün tarihini yükle
+        self.load_history_data()
+
+    def load_history_data(self):
+        selected_date = self.calendar.selectedDate().toPyDate()
+        self.table.setRowCount(0)  # Tabloyu temizle
+
+        # Veritabanından verileri al
+        users_ref = self.db.collection('list')
+        docs = users_ref.where('date', '>=', datetime.datetime.combine(selected_date, datetime.time.min)).where('date', '<=', datetime.datetime.combine(selected_date, datetime.time.max)).stream()
+        for doc in docs:
+            user_data = doc.to_dict()
+            row_position = self.table.rowCount()
+            self.table.insertRow(row_position)
+            
+            self.table.setItem(row_position, 0, QTableWidgetItem(user_data.get('id', '')))  # İsim
+            date_value = user_data.get('date', '')
+            if isinstance(date_value, datetime.datetime):
+                date_value = date_value.strftime('%Y-%m-%d %H:%M:%S')
+            self.table.setItem(row_position, 1, QTableWidgetItem(date_value))  # Tarih
+            self.table.setItem(row_position, 2, QTableWidgetItem(user_data.get('io', '')))  # Giriş/Çıkış
+            self.table.setItem(row_position, 3, QTableWidgetItem(str(user_data.get('remaining', ''))))  # Süre
+
+    def show_statistics(self):
+        # Önceki istatistik ekranını kaldır (varsa)
+        for i in range(self.stacked_widget.count()):
+            if isinstance(self.stacked_widget.widget(i), QWidget) and self.stacked_widget.widget(i).layout() is not None:
+                layout = self.stacked_widget.widget(i).layout()
+                if isinstance(layout.itemAt(0).widget(), QCalendarWidget):
+                    self.stacked_widget.removeWidget(self.stacked_widget.widget(i))
+                    break
+
+        # Yeni istatistik sayfası oluştur
+        statistics_page = QWidget()
+        statistics_layout = QVBoxLayout()
+        statistics_page.setLayout(statistics_layout)
+
+        # Takvim widget'ı ekle
+        self.calendar = QCalendarWidget()
+        self.calendar.setGridVisible(True)
+        self.calendar.setFixedSize(800, 400)  # Set fixed size for the calendar
+        self.calendar.clicked.connect(self.load_statistics_data)
+        statistics_layout.addWidget(self.calendar, alignment=Qt.AlignCenter)
+
+        # İstatistik etiketlerini ekle
+        self.total_hours_label = QLabel("Toplam Saat: 0")
+        self.total_people_label = QLabel("Toplam Kişi: 0")
+        self.thirty_minutes_label = QLabel("30 Dakika: 0")
+        self.one_hour_label = QLabel("1 Saat: 0")
+        self.two_hours_label = QLabel("2 Saat: 0")
+        self.three_hours_label = QLabel("3 Saat: 0")
+        self.four_hours_label = QLabel("4 Saat: 0")
+        self.five_hours_label = QLabel("5 Saat: 0")
+        self.six_hours_label = QLabel("6 Saat: 0")
+
+        statistics_layout.addWidget(self.total_hours_label)
+        statistics_layout.addWidget(self.total_people_label)
+        statistics_layout.addWidget(self.thirty_minutes_label)
+        statistics_layout.addWidget(self.one_hour_label)
+        statistics_layout.addWidget(self.two_hours_label)
+        statistics_layout.addWidget(self.three_hours_label)
+        statistics_layout.addWidget(self.four_hours_label)
+        statistics_layout.addWidget(self.five_hours_label)
+        statistics_layout.addWidget(self.six_hours_label)
+
+        # Geri dön butonu
+        back_button = QPushButton('Geri Dön')
+        back_button.clicked.connect(lambda: self.stacked_widget.setCurrentIndex(0))
+        statistics_layout.addWidget(back_button)
+
+        # Yeni istatistik sayfasını ekle
+        self.stacked_widget.addWidget(statistics_page)
+        self.stacked_widget.setCurrentIndex(self.stacked_widget.count() - 1)
+
+        # Varsayılan olarak bugünün tarihini yükle
+        self.load_statistics_data()
+
+    def load_statistics_data(self):
+        selected_date = self.calendar.selectedDate().toPyDate()
+
+        # Veritabanından verileri al
+        history_ref = self.db.collection('history')
+        docs = history_ref.where('date', '>=', datetime.datetime.combine(selected_date, datetime.time.min)).where('date', '<=', datetime.datetime.combine(selected_date, datetime.time.max)).stream()
+
+        total_hours = 0
+        total_people = 0
+        thirty_minutes = 0
+        one_hour = 0
+        two_hours = 0
+        three_hours = 0
+        four_hours = 0
+        five_hours = 0
+        six_hours = 0
+
+        for doc in docs:
+            user_data = doc.to_dict()
+            total_hours += user_data.get('time', 0)
+            total_people += 1
+            if user_data.get('time', 0) == 1800:
+                thirty_minutes += 1
+            elif user_data.get('time', 0) == 3600:
+                one_hour += 1
+            elif user_data.get('time', 0) == 7200:
+                two_hours += 1
+            elif user_data.get('time', 0) == 10800:
+                three_hours += 1
+            elif user_data.get('time', 0) == 14400:
+                four_hours += 1
+            elif user_data.get('time', 0) == 18000:
+                five_hours += 1
+            elif user_data.get('time', 0) == 21600:
+                six_hours += 1
+
+        self.total_hours_label.setText(f"Toplam Saat: {total_hours / 3600:.2f}")
+        self.total_people_label.setText(f"Toplam Kişi: {total_people}")
+        self.thirty_minutes_label.setText(f"30 Dakika: {thirty_minutes}")
+        self.one_hour_label.setText(f"1 Saat: {one_hour}")
+        self.two_hours_label.setText(f"2 Saat: {two_hours}")
+        self.three_hours_label.setText(f"3 Saat: {three_hours}")
+        self.four_hours_label.setText(f"4 Saat: {four_hours}")
+        self.five_hours_label.setText(f"5 Saat: {five_hours}")
+        self.six_hours_label.setText(f"6 Saat: {six_hours}")
+    
     def show_settings(self):
         settings_page = QWidget()
         settings_layout = QVBoxLayout()
