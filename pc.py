@@ -318,7 +318,7 @@ class UserPhotoCaptureApp(QMainWindow):
 
         # Veriyi Firestore'a kaydet
         data = {
-            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+            'date': firestore.SERVER_TIMESTAMP,
             'id': name,
             'time': self.time_limit
         }
@@ -580,15 +580,15 @@ class UserPhotoCaptureApp(QMainWindow):
             elif user_data.get('time', 0) == 21600:
                 six_hours += 1
 
-        self.total_hours_label.setText(f"Toplam Saat: {total_hours / 3600:.2f}")
-        self.total_people_label.setText(f"Toplam Kişi: {total_people}")
-        self.thirty_minutes_label.setText(f"30 Dakika: {thirty_minutes}")
-        self.one_hour_label.setText(f"1 Saat: {one_hour}")
-        self.two_hours_label.setText(f"2 Saat: {two_hours}")
-        self.three_hours_label.setText(f"3 Saat: {three_hours}")
-        self.four_hours_label.setText(f"4 Saat: {four_hours}")
-        self.five_hours_label.setText(f"5 Saat: {five_hours}")
-        self.six_hours_label.setText(f"6 Saat: {six_hours}")
+        self.total_hours_label.setText(f"Toplam Saat: {total_hours // 3600}.{total_hours % 3600 // 60} saat")
+        self.total_people_label.setText(f"Toplam Kişi: {total_people} Kişi")
+        self.thirty_minutes_label.setText(f"30 Dakika: {thirty_minutes} Kişi")
+        self.one_hour_label.setText(f"1 Saat: {one_hour} Kişi")
+        self.two_hours_label.setText(f"2 Saat: {two_hours} Kişi")
+        self.three_hours_label.setText(f"3 Saat: {three_hours} Kişi")
+        self.four_hours_label.setText(f"4 Saat: {four_hours} Kişi")
+        self.five_hours_label.setText(f"5 Saat: {five_hours} Kişi")
+        self.six_hours_label.setText(f"6 Saat: {six_hours} Kişi")
     
     def show_settings(self):
         settings_page = QWidget()

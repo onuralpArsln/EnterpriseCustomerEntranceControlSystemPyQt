@@ -207,7 +207,9 @@ class UserPhotoCaptureApp(QMainWindow):
 
         self.count = 0
         #self.name_input.setFocus()
-
+        self.last_uid = None
+        self.last_read_time = 0
+        self.debounce_time = 7
 
     def update_scene_size(self):
         # Scene boyutlarını, fotoğrafların en son eklenen pozisyonuna göre ayarla
@@ -353,40 +355,76 @@ class UserPhotoCaptureApp(QMainWindow):
 
     def check_photo_timestamps(self):
         
-        uid = self.pn532.read_passive_target(timeout=3)
+        uid = self.pn532.read_passive_target(timeout=0.5)
+        print(uid)
         if uid is not None:
-            uid = int.from_bytes(uid, "little")
-            uid = str(uid).zfill(10)
-            filename = f'users/{uid}.jpg'
-            index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
+            if uid != self.last_uid or (time.time() - self.last_read_time > self.debounce_time):
+                self.last_uid = uid
+                self.last_read_time = time.time()
+                print("Girdim")
+                uid = int.from_bytes(uid, "little")
+                uid = str(uid).zfill(10)
+                filename = f'users/{uid}.jpg'
+                index = next((i for i, image in enumerate(self.image_grid.images) if image.image_path == filename), -1)
         
-            if index != -1:
-                if self.image_grid.images[index].image_path == filename:
-                    if self.image_grid.images[index].gettime() <= 0:
+                if index != -1:
+                    if self.image_grid.images[index].image_path == filename:
+                        if self.image_grid.images[index].gettime() <= 0:
                         #self.save_to_database(filename)
-                        self.image_grid.images[index].removeOverlay()
-                        self.image_grid.images[index].removeTimerLabel()
-                        self.image_grid.images.pop(index)
-                        self.image_grid.updateGrid()
-                    else:
-                        data = {
-                            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
-                            'id': uid,
-                            'time': self.image_grid.images[index].gettime()
-                        }
-                        self.db.collection('users').add(data)
+                            self.image_grid.images[index].removeOverlay()
+                            self.image_grid.images[index].removeTimerLabel()
+                            self.image_grid.images.pop(index)
+                            self.image_grid.updateGrid()
+                        else:
+                            data = {
+                                'date': firestore.SERVER_TIMESTAMP,
+                                'id': uid,
+                                'time': self.image_grid.images[index].gettime()
+                            }
+                            self.db.collection('users').add(data)
 
-                        data2 = {
-                            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
-                            'id': uid,
-                            'io': "Çıkış",
-                            "remaining": self.image_grid.images[index].gettime()
-                        }
-                        self.db.collection('list').add(data2)
-                        self.image_grid.images[index].removeOverlay()
-                        self.image_grid.images[index].removeTimerLabel()
-                        self.image_grid.images.pop(index)
-                        self.image_grid.updateGrid()
+                            data2 = {
+                                'date': firestore.SERVER_TIMESTAMP,
+                                'id': uid,
+                                'io': "Çıkış",
+                                "remaining": self.image_grid.images[index].gettime()
+                            }
+                            self.db.collection('list').add(data2)
+                            self.image_grid.images[index].removeOverlay()
+                            self.image_grid.images[index].removeTimerLabel()
+                            self.image_grid.images.pop(index)
+                            self.image_grid.updateGrid()
+                    else:
+                        users_ref = self.db.collection('users')
+                        query = users_ref.where('id', '==', uid)
+                        results = query.stream()
+                        time_value = 0
+                        for doc in results:
+                            time_value = doc.to_dict().get('time')
+                            doc.reference.delete()
+                            if self.capture.isOpened():
+                                ret, frame = self.capture.read()
+                                if ret:
+                                    cv2.imwrite(filename, frame)
+                                else:
+                                    print("Gamara yok siyah görsel kaydediliyor.")
+                                    self.save_black_image(filename)
+                            else:
+                                print("Açılamadı siyah görsel kaydediliyor.")
+                                self.save_black_image(filename)
+                        
+                            self.photo_timestamps[filename] = time.time()
+                            self.image_grid.addImage(filename, max(0, int(time_value)))
+                            data2 = {
+                                'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+                                'id': uid,
+                                'io': "Giriş",
+                                "remaining": int(time_value)
+                            }
+                            self.db.collection('list').add(data2)
+                            break
+                        else:
+                            print(f"User {uid} not found in Firestore")
                 else:
                     users_ref = self.db.collection('users')
                     query = users_ref.where('id', '==', uid)
@@ -405,7 +443,7 @@ class UserPhotoCaptureApp(QMainWindow):
                         else:
                             print("Açılamadı siyah görsel kaydediliyor.")
                             self.save_black_image(filename)
-                        
+            
                         self.photo_timestamps[filename] = time.time()
                         self.image_grid.addImage(filename, max(0, int(time_value)))
                         data2 = {
@@ -416,14 +454,12 @@ class UserPhotoCaptureApp(QMainWindow):
                         }
                         self.db.collection('list').add(data2)
                         break
-                    else:
-                        print(f"User {uid} not found in Firestore")
-        self.count = self.count + 1
-        if self.count == 10:
-            self.count = 0
-            self.save_timers(self.image_grid.images)
-            self.image_grid.images.sort(key=lambda image: image.timeLeft)
-            self.image_grid.updateGrid()
+            self.count = self.count + 1
+            if self.count == 10:
+                self.count = 0
+                self.save_timers(self.image_grid.images)
+                self.image_grid.images.sort(key=lambda image: image.timeLeft)
+                self.image_grid.updateGrid()
         
             
         '''
@@ -756,6 +792,7 @@ class ImageWidget(QWidget):
             self.timerLabel.setText(f'{hours:02}:{minutes:02}')
     
     def removeTimerLabel(self):
+        self.timer.stop()
         self.timerLabel.setText('')
 
     def removeOverlay(self):
