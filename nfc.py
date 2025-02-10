@@ -271,7 +271,7 @@ class UserPhotoCaptureApp(QMainWindow):
         
         # Veriyi Firestore'a kaydet
         data = {
-            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+            'date': firestore.SERVER_TIMESTAMP,
             'id': name,
             'time': self.time_limit
         }
@@ -342,7 +342,7 @@ class UserPhotoCaptureApp(QMainWindow):
             return
 
         photo_data = open(filename, 'rb').read()  # Fotoğrafı veritabanına ekle
-        entry_date = time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time()))
+        entry_date = firestore.SERVER_TIMESTAMP
         self.cursor.execute("INSERT INTO users (name, photo, entry_date, time_limit) VALUES (?, ?, ?, ?)",
                             (filename, photo_data, entry_date, self.time_limit))
         
@@ -416,7 +416,7 @@ class UserPhotoCaptureApp(QMainWindow):
                             self.photo_timestamps[filename] = time.time()
                             self.image_grid.addImage(filename, max(0, int(time_value)))
                             data2 = {
-                                'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+                                'date': firestore.SERVER_TIMESTAMP,
                                 'id': uid,
                                 'io': "Giriş",
                                 "remaining": int(time_value)
@@ -447,7 +447,7 @@ class UserPhotoCaptureApp(QMainWindow):
                         self.photo_timestamps[filename] = time.time()
                         self.image_grid.addImage(filename, max(0, int(time_value)))
                         data2 = {
-                            'date': time.strftime("%d/%m/%Y - %H:%M:%S", time.localtime(time.time())),
+                            'date': firestore.SERVER_TIMESTAMP,
                             'id': uid,
                             'io': "Giriş",
                             "remaining": int(time_value)

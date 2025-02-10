@@ -73,7 +73,7 @@ class UserPhotoCaptureApp(QMainWindow):
             }
         """)
 
-        self.time_limit = 10
+        self.time_limit = 0
         self.time_start = None
 
         # Veritabanı bağlantısı
@@ -289,7 +289,6 @@ class UserPhotoCaptureApp(QMainWindow):
         minute = int(settings.value("minute", "0"))  # Varsayılan: 0 dakika
         second = int(settings.value("second", "10"))  # Varsayılan: 10 saniye
         '''
-        
         if self.time_limit == 0:
             self.time_limit = 1800  # Varsayılan: 30 dakika
         else:
